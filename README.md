@@ -75,8 +75,30 @@ same opacity COSMIC uses for the chosen frosted level, from COSMIC's
 - `frosted`: `"auto"` follows COSMIC, `"on"` always uses frosted glass, `"off"` never does.
 - `opacity`: `"auto"` uses COSMIC's level, or a number from 0 to 1 (lower shows more of the blurred desktop).
 
-Changes to this file are applied immediately too. The blur itself comes from
-the compositor. If it doesn't support blur, the window is translucent but not blurred.
+Changes to this file are applied immediately too.
+
+COSMIC's Frosted glass page has two sliders, and both reach Zed:
+
+- **Glass opacity** is saved in COSMIC's `alpha_map`. The generator uses it
+  for Zed's surfaces, the same way COSMIC does for its own windows.
+- **Frost thickness** (the `frosted` level) is the blur strength. Wayland
+  apps can only ask the compositor to blur behind them; they can't set the
+  strength. The compositor blurs every window that asks with your Frost
+  thickness. Moving the slider also picks a different `alpha_map` entry, so
+  Zed's opacity follows it, just as COSMIC's own windows do.
+
+### Blur needs a recent Zed
+
+COSMIC's compositor only offers the standard `ext-background-effect-v1` blur
+protocol. Zed releases up to 1.27 only speak the older KDE protocol
+(`org_kde_kwin_blur`), so on COSMIC they are translucent but **not blurred**.
+Zed switched to `ext-background-effect-v1` in
+[zed-industries/zed#53746](https://github.com/zed-industries/zed/pull/53746)
+(merged 30 October 2026). Releases built after that get COSMIC's real frost.
+
+Until then, a sharp wallpaper behind a see-through editor can be hard to read.
+Set a higher `opacity` (for example `0.92`) in the config file, or
+`"frosted": "off"`, and change it back after updating Zed.
 
 ## Manual use
 
