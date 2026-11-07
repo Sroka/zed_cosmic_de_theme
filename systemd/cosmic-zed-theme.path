@@ -2,7 +2,11 @@
 Description=Watch the COSMIC desktop theme and keep the Zed theme in sync
 
 [Path]
+# COSMIC stores its theme as one file per key; v2 is the current format,
+# v1 is kept for older COSMIC releases.
 PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Mode/v1
+PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Dark/v2
+PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Light/v2
 PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Dark/v1
 PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Light/v1
 PathChanged=%h/.config/zed-cosmic-theme/config.json

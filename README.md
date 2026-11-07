@@ -15,7 +15,9 @@ right away.
 COSMIC keeps the system defaults in `/usr/share/cosmic` and your changes in
 `~/.config/cosmic`, one file per setting. The generator merges the two the
 same way COSMIC does, so any theme works: the defaults, a customised one or
-an imported `.ron` theme.
+an imported `.ron` theme. It reads the newest config format present (`v2`
+on current COSMIC, with `#RRGGBBAA` colours) and still understands the older
+`v1` format.
 
 | COSMIC | Zed |
 | --- | --- |
@@ -25,7 +27,7 @@ an imported `.ron` theme.
 | `accent` | cursor, focus borders, active line number, selections, links |
 | `success` / `warning` / `destructive` | diagnostics and git status colours |
 | `palette` accents and neutrals | syntax highlighting and terminal ANSI colours |
-| `is_frosted` (**Frosted glass**) | `background.appearance: "blurred"` with translucent surfaces |
+| **Frosted glass** (`frosted_windows` + `frosted` level) | `background.appearance: "blurred"`, surfaces at COSMIC's opacity for that level |
 | Mode `is_dark` (incl. auto-switch) | which palette the `COSMIC` theme uses |
 
 ## Themes it generates
@@ -56,20 +58,22 @@ Uninstall with `./uninstall.sh`.
 
 ## Frosted glass
 
-By default the Zed theme follows COSMIC's **Frosted glass** toggle. When it is
-on, Zed's window background is blurred and editor, panels and bars become
-translucent. You can override this in `~/.config/zed-cosmic-theme/config.json`
+By default the Zed theme follows COSMIC Settings → Desktop → Appearance →
+**Frosted glass**: if frosted glass is on for windows, Zed's window background
+is blurred, and the editor, panels and bars become translucent. They use the
+same opacity COSMIC uses for the chosen frosted level, from COSMIC's
+`alpha_map`. You can override this in `~/.config/zed-cosmic-theme/config.json`
 (see `config.example.json`):
 
 ```json
 {
   "frosted": "auto",
-  "opacity": 0.8
+  "opacity": "auto"
 }
 ```
 
 - `frosted`: `"auto"` follows COSMIC, `"on"` always uses frosted glass, `"off"` never does.
-- `opacity`: how opaque surfaces are when frosted glass is on (0–1). Lower values show more of the blurred desktop.
+- `opacity`: `"auto"` uses COSMIC's level, or a number from 0 to 1 (lower shows more of the blurred desktop).
 
 Changes to this file are applied immediately too. The blur itself comes from
 the compositor. If it doesn't support blur, the window is translucent but not blurred.

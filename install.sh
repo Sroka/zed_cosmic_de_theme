@@ -8,7 +8,9 @@ units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 mkdir -p "$bin" "$units" \
   "$HOME/.config/cosmic/com.system76.CosmicTheme.Mode/v1" \
   "$HOME/.config/cosmic/com.system76.CosmicTheme.Dark/v1" \
-  "$HOME/.config/cosmic/com.system76.CosmicTheme.Light/v1"
+  "$HOME/.config/cosmic/com.system76.CosmicTheme.Light/v1" \
+  "$HOME/.config/cosmic/com.system76.CosmicTheme.Dark/v2" \
+  "$HOME/.config/cosmic/com.system76.CosmicTheme.Light/v2"
 
 install -m 755 cosmic_zed_theme.py "$bin/cosmic-zed-theme"
 install -m 644 systemd/cosmic-zed-theme.service systemd/cosmic-zed-theme.path "$units/"
@@ -17,7 +19,8 @@ install -m 644 systemd/cosmic-zed-theme.service systemd/cosmic-zed-theme.path "$
 
 if command -v systemctl >/dev/null && systemctl --user show-environment >/dev/null 2>&1; then
   systemctl --user daemon-reload
-  systemctl --user enable --now cosmic-zed-theme.path
+  systemctl --user enable cosmic-zed-theme.path
+  systemctl --user restart cosmic-zed-theme.path
   echo "Watching COSMIC theme changes (systemctl --user status cosmic-zed-theme.path)."
 else
   echo "systemd --user not available; run 'cosmic-zed-theme --watch' from your session autostart instead."

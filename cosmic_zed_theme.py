@@ -8,7 +8,7 @@ defaults (/usr/share/cosmic/...). The result is written as a Zed theme family
 reloads theme files when they change, so re-running this script (or keeping
 it running with --watch / the systemd path unit) makes Zed follow COSMIC.
 
-COSMIC's "Frosted glass" setting (is_frosted) is mapped to Zed's blurred
+COSMIC's "Frosted glass" setting (level + windows switch) is mapped to Zed's blurred
 window background with translucent surfaces.
 
 Only the Python 3 standard library is required.
@@ -24,13 +24,12 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SCHEMA = "https://zed.dev/schema/themes/v0.2.0.json"
 THEME_FILE = "cosmic.json"
 DARK_ID = "com.system76.CosmicTheme.Dark"
 LIGHT_ID = "com.system76.CosmicTheme.Light"
 MODE_ID = "com.system76.CosmicTheme.Mode"
-CONFIG_VERSION = "v1"
 
 
 # --------------------------------------------------------------------------
@@ -181,28 +180,51 @@ def _config_roots() -> list[Path]:
     return roots
 
 
+def config_version(config_id: str) -> str:
+    """Newest config schema version present for this id (COSMIC reads only
+    its own version, e.g. v2 since libcosmic switched to hex colours)."""
+    best = 0
+    for root in _config_roots():
+        try:
+            for d in (root / config_id).iterdir():
+                m = re.fullmatch(r"v(\d+)", d.name)
+                if m and d.is_dir() and any(d.iterdir()):
+                    best = max(best, int(m.group(1)))
+        except OSError:
+            pass
+    return f"v{best or 1}"
+
+
 def watched_dirs() -> list[Path]:
-    return [r / cid / CONFIG_VERSION for r in _config_roots() for cid in (DARK_ID, LIGHT_ID, MODE_ID)]
+    dirs = []
+    for root in _config_roots():
+        for cid in (DARK_ID, LIGHT_ID, MODE_ID):
+            dirs.append(root / cid)
+            dirs.append(root / cid / config_version(cid))
+    return dirs
 
 
 def read_key(config_id: str, key: str, default=None):
+    version = config_version(config_id)
     for root in _config_roots():
-        f = root / config_id / CONFIG_VERSION / key
+        f = root / config_id / version / key
         try:
             text = f.read_text()
         except OSError:
             continue
         try:
-            return parse_ron(text)
+            return normalize(parse_ron(text))
         except RonError as e:
             print(f"warning: cannot parse {f}: {e}", file=sys.stderr)
     return default
 
 
 THEME_KEYS = (
-    "name", "is_dark", "is_frosted", "is_high_contrast", "palette",
+    "name", "is_dark", "is_high_contrast", "palette",
     "background", "primary", "secondary", "accent", "success", "warning",
     "destructive", "button", "accent_button", "text_button",
+    # Frosted glass: v1 used a single flag, v2 a level + per-surface switches.
+    "is_frosted", "frosted", "frosted_windows", "alpha_map",
 )
 
 
@@ -211,6 +233,7 @@ def load_cosmic_theme(config_id: str) -> dict | None:
     required = ("palette", "background", "primary", "secondary", "accent")
     if any(theme[k] is None for k in required):
         return None
+    theme["_version"] = config_version(config_id)
     return theme
 
 
@@ -218,15 +241,34 @@ def load_cosmic_theme(config_id: str) -> dict | None:
 # Colours
 # --------------------------------------------------------------------------
 
-def rgba(c: dict, alpha: float | None = None) -> tuple[float, float, float, float]:
-    a = c.get("alpha", 1.0) if alpha is None else alpha
-    return (c["red"], c["green"], c["blue"], a)
+_HEX = re.compile(r"#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})")
+
+
+def normalize(v):
+    """Turn every COSMIC colour into an (r, g, b, a) tuple of floats.
+
+    v1 configs store colours as structs (red: 0.5, green: ...), v2 configs
+    as "#RRGGBBAA" strings.
+    """
+    if isinstance(v, str) and _HEX.fullmatch(v):
+        h = v[1:] + ("ff" if len(v) == 7 else "")
+        return tuple(int(h[i:i + 2], 16) / 255 for i in range(0, 8, 2))
+    if isinstance(v, dict):
+        if {"red", "green", "blue"} <= v.keys():
+            return (v["red"], v["green"], v["blue"], v.get("alpha", 1.0))
+        return {k: normalize(x) for k, x in v.items()}
+    return v
+
+
+def rgba(c, alpha: float | None = None) -> tuple[float, float, float, float]:
+    if isinstance(c, dict):
+        c = normalize(c)
+    r, g, b, a = c
+    return (r, g, b, a if alpha is None else alpha)
 
 
 def hexc(c, alpha: float | None = None) -> str:
-    if isinstance(c, dict):
-        c = rgba(c)
-    r, g, b, a = c
+    r, g, b, a = rgba(c)
     if alpha is not None:
         a = alpha
     ch = [max(0, min(255, round(max(0.0, min(1.0, v)) * 255))) for v in (r, g, b, a)]
@@ -235,21 +277,16 @@ def hexc(c, alpha: float | None = None) -> str:
 
 def mix(a, b, t: float):
     """Linear blend from colour a to colour b (t = 0 → a, t = 1 → b)."""
-    a = rgba(a) if isinstance(a, dict) else a
-    b = rgba(b) if isinstance(b, dict) else b
-    return tuple(x + (y - x) * t for x, y in zip(a, b))
-
-
-def with_alpha(c, alpha: float):
-    c = rgba(c) if isinstance(c, dict) else c
-    return (c[0], c[1], c[2], alpha)
+    return tuple(x + (y - x) * t for x, y in zip(rgba(a), rgba(b)))
 
 
 # --------------------------------------------------------------------------
 # COSMIC → Zed mapping
 # --------------------------------------------------------------------------
 
-def build_style(t: dict, frosted: bool, opacity: float) -> dict:
+def build_style(t: dict, opacity: float | None) -> dict:
+    """opacity: surface opacity for frosted glass, or None for opaque."""
+    frosted = opacity is not None
     p = t["palette"]
     bg, pri, sec = t["background"], t["primary"], t["secondary"]
     acc = t["accent"]
@@ -482,7 +519,7 @@ def settings_path() -> Path:
 
 
 def load_settings() -> dict:
-    defaults = {"frosted": "auto", "opacity": 0.8, "output": []}
+    defaults = {"frosted": "auto", "opacity": "auto", "output": []}
     try:
         user = json.loads(settings_path().read_text())
         defaults.update({k: v for k, v in user.items() if k in defaults})
@@ -505,15 +542,47 @@ def zed_theme_dirs() -> list[Path]:
     return found or [candidates[0] / "themes"]
 
 
-def resolve_frosted(mode: str, theme: dict) -> bool:
-    if mode in ("on", "true", True):
-        return True
+DEFAULT_OPACITY = 0.76  # COSMIC's "Medium" frosted level
+
+
+def _snake(name: str) -> str:
+    """COSMIC level names (Medium, Low2, ExtremelyHigh2) → alpha_map keys."""
+    s = re.sub(r"(?<=[a-z])(?=[A-Z])", "_", name)
+    s = re.sub(r"(?<=[A-Za-z])(?=\d)", "_", s)
+    return s.lower()
+
+
+def cosmic_frosted(theme: dict) -> float | None:
+    """Opacity COSMIC uses for frosted windows, or None when it is off."""
+    if theme.get("_version", "v1") != "v1" and theme.get("frosted_windows") is not None:
+        if not theme.get("frosted_windows"):
+            return None
+        level = theme.get("frosted")
+        alpha_map = theme.get("alpha_map") or {}
+        if isinstance(level, str):
+            if level.lower() in ("none", "off", "disabled"):
+                return None
+            if _snake(level) in alpha_map:
+                return float(alpha_map[_snake(level)])
+        if isinstance(level, (int, float)):
+            return float(level)
+        return DEFAULT_OPACITY
+    return DEFAULT_OPACITY if theme.get("is_frosted") else None
+
+
+def resolve_frosted(mode: str, opacity, theme: dict) -> float | None:
+    """Final surface opacity for Zed, or None for an opaque theme."""
+    from_cosmic = cosmic_frosted(theme)
     if mode in ("off", "false", False):
-        return False
-    return bool(theme.get("is_frosted"))
+        return None
+    if mode not in ("on", "true", True) and from_cosmic is None:
+        return None
+    if isinstance(opacity, (int, float)):
+        return max(0.0, min(1.0, float(opacity)))
+    return from_cosmic if from_cosmic is not None else DEFAULT_OPACITY
 
 
-def generate(frosted_mode: str, opacity: float) -> dict:
+def generate(frosted_mode: str, opacity) -> dict:
     dark = load_cosmic_theme(DARK_ID)
     light = load_cosmic_theme(LIGHT_ID)
     if not dark and not light:
@@ -523,11 +592,10 @@ def generate(frosted_mode: str, opacity: float) -> dict:
     themes = []
 
     def add(name, t):
-        frosted = resolve_frosted(frosted_mode, t)
         themes.append({
             "name": name,
             "appearance": "dark" if t.get("is_dark", True) else "light",
-            "style": build_style(t, frosted, opacity),
+            "style": build_style(t, resolve_frosted(frosted_mode, opacity, t)),
         })
 
     active = (dark if is_dark else light) or dark or light
@@ -580,8 +648,12 @@ def snapshot() -> dict:
 def run_once(args) -> None:
     cfg = load_settings()
     frosted = args.frosted or cfg["frosted"]
-    opacity = args.opacity if args.opacity is not None else float(cfg["opacity"])
-    opacity = max(0.0, min(1.0, opacity))
+    opacity = args.opacity if args.opacity is not None else cfg["opacity"]
+    if not isinstance(opacity, (int, float)):
+        try:
+            opacity = float(opacity)
+        except (TypeError, ValueError):
+            opacity = "auto"  # use COSMIC's frosted level
     outs = [Path(o).expanduser() for o in (args.output or cfg["output"])] or zed_theme_dirs()
     if args.stdout:
         print(json.dumps(generate(frosted, opacity), indent=2))
@@ -599,7 +671,7 @@ def main(argv=None) -> int:
     ap.add_argument("--frosted", choices=["auto", "on", "off"],
                     help="frosted glass: follow COSMIC (auto, default), or force on/off")
     ap.add_argument("--opacity", type=float,
-                    help="surface opacity used when frosted glass is on (0-1, default 0.8)")
+                    help="surface opacity when frosted glass is on (0-1; default: COSMIC's frosted level)")
     ap.add_argument("-o", "--output", action="append",
                     help="Zed themes directory to write to (repeatable; default: auto-detect)")
     ap.add_argument("--stdout", action="store_true", help="print the theme instead of writing it")
