@@ -3,6 +3,11 @@
 A [Zed](https://zed.dev) theme that follows the theme set in the **COSMIC desktop**,
 including COSMIC's **Frosted glass** setting.
 
+![Zed with the COSMIC theme and frosted glass, next to COSMIC Settings and COSMIC Terminal](docs/screenshots/zed-frosted-cosmic.webp)
+
+*Zed (left) using the generated COSMIC theme with frosted glass, next to
+COSMIC Settings → Appearance and COSMIC Terminal.*
+
 Zed themes are static JSON files, so this project ships a small generator
 (`cosmic-zed-theme`, Python 3 standard library only). It reads COSMIC's
 theme config and writes a `COSMIC` theme family into Zed's themes folder.
@@ -78,6 +83,8 @@ same opacity COSMIC uses for the chosen frosted level, from COSMIC's
 Changes to this file are applied immediately too.
 
 COSMIC's Frosted glass page has two sliders, and both reach Zed:
+
+![COSMIC Settings Frost thickness and Glass opacity sliders](docs/screenshots/cosmic-frosted-sliders.png)
 
 - **Glass opacity** is saved in COSMIC's `alpha_map`. The generator uses it
   for Zed's surfaces, the same way COSMIC does for its own windows.
