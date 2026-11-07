@@ -1,0 +1,6 @@
+[Unit]
+Description=Regenerate the Zed COSMIC theme from the current COSMIC desktop theme
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cosmic-zed-theme --quiet
