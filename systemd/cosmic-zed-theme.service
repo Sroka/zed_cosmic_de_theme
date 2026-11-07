@@ -1,6 +1,11 @@
 [Unit]
 Description=Regenerate the Zed COSMIC theme from the current COSMIC desktop theme
+# COSMIC rewrites ~40 files per change; never let systemd give up on us.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+# Wait for COSMIC to finish writing; triggers during the wait are merged
+# into this run.
+ExecStartPre=/bin/sleep 0.5
 ExecStart=%h/.local/bin/cosmic-zed-theme --quiet

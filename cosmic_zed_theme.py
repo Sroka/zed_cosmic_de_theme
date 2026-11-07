@@ -296,11 +296,27 @@ def build_style(t: dict, opacity: float | None) -> dict:
     dark = bool(t.get("is_dark", True))
     pc = pri["component"]
 
-    # Surfaces become translucent in frosted mode.
+    # Frosted mode: Zed paints the window `background` first and draws the
+    # editor, panels, bars and tabs on top of it. Translucent layers stack
+    # (two at 81% look 96% opaque), so only the window background carries
+    # COSMIC's opacity. Docked surfaces are fully transparent ("base"), and
+    # primary-coloured areas get a light tint ("tint") that keeps COSMIC's
+    # container contrast without adding much opacity. Popovers and menus
+    # stay nearly opaque so text under them doesn't show through.
     surf_a = opacity if frosted else 1.0
+    TINT = 0.3
 
-    def surface(c):
+    def window_bg(c):
         return hexc(c, rgba(c)[3] * surf_a)
+
+    def base(c):
+        return "#00000000" if frosted else hexc(c)
+
+    def tint(c):
+        return hexc(c, TINT) if frosted else hexc(c)
+
+    def popover(c):
+        return hexc(c, max(0.95, surf_a)) if frosted else hexc(c)
 
     text = pri["on"]
     ui_text = bg["on"]
@@ -331,9 +347,9 @@ def build_style(t: dict, opacity: float | None) -> dict:
         "border.transparent": "#00000000",
         "border.disabled": hexc(pc["disabled_border"]),
 
-        "elevated_surface.background": hexc(sec["base"], rgba(sec["base"])[3] * (min(1.0, surf_a + 0.1))),
-        "surface.background": surface(pri["base"]),
-        "background": surface(bg["base"]),
+        "elevated_surface.background": popover(sec["base"]),
+        "surface.background": popover(pri["base"]),
+        "background": window_bg(bg["base"]),
 
         "element.background": hexc(pc["base"]),
         "element.hover": hexc(pc["hover"]),
@@ -361,15 +377,15 @@ def build_style(t: dict, opacity: float | None) -> dict:
         "icon.placeholder": hexc(placeholder),
         "icon.accent": hexc(acc["base"]),
 
-        "status_bar.background": surface(bg["base"]),
-        "title_bar.background": surface(bg["base"]),
-        "title_bar.inactive_background": surface(bg["base"]),
-        "toolbar.background": surface(pri["base"]),
-        "tab_bar.background": surface(bg["base"]),
-        "tab.inactive_background": surface(bg["base"]),
-        "tab.active_background": surface(pri["base"]),
+        "status_bar.background": base(bg["base"]),
+        "title_bar.background": base(bg["base"]),
+        "title_bar.inactive_background": base(bg["base"]),
+        "toolbar.background": base(pri["base"]),
+        "tab_bar.background": base(bg["base"]),
+        "tab.inactive_background": base(bg["base"]),
+        "tab.active_background": tint(pri["base"]),
         "search.match_background": hexc(acc["base"], 0.3),
-        "panel.background": surface(bg["base"]),
+        "panel.background": base(bg["base"]),
         "panel.focused_border": hexc(acc["focus"]),
         "panel.indent_guide": hexc(bg["divider"]),
         "panel.indent_guide_active": hexc(mix(bg["divider"], ui_text, 0.4)),
@@ -384,9 +400,9 @@ def build_style(t: dict, opacity: float | None) -> dict:
         "scrollbar.track.border": "#00000000",
 
         "editor.foreground": hexc(text),
-        "editor.background": surface(pri["base"]),
-        "editor.gutter.background": surface(pri["base"]),
-        "editor.subheader.background": surface(bg["base"]),
+        "editor.background": tint(pri["base"]),
+        "editor.gutter.background": tint(pri["base"]),
+        "editor.subheader.background": base(bg["base"]),
         "editor.active_line.background": hexc(pc["hover"], 0.35),
         "editor.highlighted_line.background": hexc(pc["hover"], 0.5),
         "editor.line_number": hexc(mix(text, pri["base"], 0.55)),
@@ -400,11 +416,11 @@ def build_style(t: dict, opacity: float | None) -> dict:
         "editor.document_highlight.write_background": hexc(acc["base"], 0.22),
         "editor.document_highlight.bracket_background": hexc(acc["base"], 0.18),
 
-        "terminal.background": surface(pri["base"]),
+        "terminal.background": tint(pri["base"]),
         "terminal.foreground": hexc(text),
         "terminal.bright_foreground": hexc(p["neutral_10"] if dark else p["neutral_0"]),
         "terminal.dim_foreground": hexc(muted),
-        "terminal.ansi.background": surface(pri["base"]),
+        "terminal.ansi.background": tint(pri["base"]),
     }
 
     ansi = {
